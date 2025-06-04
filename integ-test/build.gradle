@@ -48,6 +48,7 @@ apply plugin: 'com.wiredforcode.spawn'
 
 
 repositories {
+    mavenLocal()
     mavenCentral()
     maven { url 'https://jitpack.io' }
 
@@ -62,22 +63,22 @@ ext {
     licenseFile = rootProject.file('LICENSE.TXT')
     noticeFile = rootProject.file('NOTICE')
 
-    getSecurityPluginDownloadLink = { ->
-        var repo = "https://aws.oss.sonatype.org/content/repositories/snapshots/org/opensearch/plugin/" +
-                   "opensearch-security/$opensearch_build_snapshot/"
-        var metadataFile = Paths.get(projectDir.toString(), "build", "maven-metadata.xml").toAbsolutePath().toFile()
-        download.run {
-            src repo + "maven-metadata.xml"
-            dest metadataFile
-        }
-        def metadata = new XmlParser().parse(metadataFile)
-        def securitySnapshotVersion = metadata.versioning.snapshotVersions[0].snapshotVersion[0].value[0].text()
+    // getSecurityPluginDownloadLink = { ->
+    //     var repo = "https://aws.oss.sonatype.org/content/repositories/snapshots/org/opensearch/plugin/" +
+    //                "opensearch-security/$opensearch_build_snapshot/"
+    //     var metadataFile = Paths.get(projectDir.toString(), "build", "maven-metadata.xml").toAbsolutePath().toFile()
+    //     download.run {
+    //         src repo + "maven-metadata.xml"
+    //         dest metadataFile
+    //     }
+    //     def metadata = new XmlParser().parse(metadataFile)
+    //     def securitySnapshotVersion = metadata.versioning.snapshotVersions[0].snapshotVersion[0].value[0].text()
 
-        return repo + "opensearch-security-${securitySnapshotVersion}.zip"
-    }
+    //     return repo + "opensearch-security-${securitySnapshotVersion}.zip"
+    // }
 
     var projectAbsPath = projectDir.getAbsolutePath()
-    File downloadedSecurityPlugin = Paths.get(projectAbsPath, 'bin', 'opensearch-security-snapshot.zip').toFile()
+    // File downloadedSecurityPlugin = Paths.get(projectAbsPath, 'bin', 'opensearch-security-snapshot.zip').toFile()
     configureSecurityPlugin = { OpenSearchCluster cluster ->
 
         cluster.getNodes().forEach { node ->
@@ -90,14 +91,14 @@ ext {
         }
 
         // add a check to avoid re-downloading multiple times during single test run
-        if (!downloadedSecurityPlugin.exists()) {
-            download.run {
-                src getSecurityPluginDownloadLink()
-                dest downloadedSecurityPlugin
-            }
-        } else {
-            println "Security Plugin File Already Exists"
-        }
+        // if (!downloadedSecurityPlugin.exists()) {
+        //     download.run {
+        //         src getSecurityPluginDownloadLink()
+        //         dest downloadedSecurityPlugin
+        //     }
+        // } else {
+        //     println "Security Plugin File Already Exists"
+        // }
 
         // Config below including files are copied from security demo configuration
         ['esnode.pem', 'esnode-key.pem', 'root-ca.pem'].forEach { file ->
@@ -133,7 +134,7 @@ ext {
             cluster.setting name, value
         }
 
-        cluster.plugin provider((Callable<RegularFile>) (() -> (RegularFile) (() -> downloadedSecurityPlugin)))
+        // cluster.plugin provider((Callable<RegularFile>) (() -> (RegularFile) (() -> downloadedSecurityPlugin)))
     }
 
     bwcFilePath = "src/test/resources/bwc/"
@@ -227,6 +228,22 @@ def getJobSchedulerPlugin() {
     })
 }
 
+def getSecurityPlugin() {
+    provider(new Callable<RegularFile>() {
+        @Override
+        RegularFile call() throws Exception {
+            return new RegularFile() {
+                @Override
+                File getAsFile() {
+                    return configurations.zipArchive.asFileTree.matching {
+                        include '**/opensearch-security*'
+                    }.singleFile
+                }
+            }
+        }
+    })
+}
+
 testClusters {
     integTest {
         testDistribution = 'archive'
@@ -242,11 +259,13 @@ testClusters {
     integTestWithSecurity {
         testDistribution = 'archive'
         plugin(getJobSchedulerPlugin())
+        plugin(getSecurityPlugin())
         plugin ":opensearch-sql-plugin"
     }
     remoteIntegTestWithSecurity {
         testDistribution = 'archive'
         plugin(getJobSchedulerPlugin())
+        plugin(getSecurityPlugin())
         plugin ":opensearch-sql-plugin"
     }
 }
